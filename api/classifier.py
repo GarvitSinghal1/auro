@@ -1,101 +1,67 @@
-import os
-from dotenv import load_dotenv
 import google.generativeai as genai
 from PIL import Image
-import io
-import time
-import re
 import json
-from itertools import cycle
 
-load_dotenv()
-
-def load_api_keys():
-    """Loads all GEMINI_API_KEY_... from the environment and returns them as a list."""
-    keys = []
-    i = 1
-    while True:
-        key = os.getenv(f"GEMINI_API_KEY_{i}")
-        if key:
-            keys.append(key)
-            i += 1
-        else:
-            break
-    if not keys:
-        raise ValueError("ERROR: No GEMINI_API_KEY_... found in .env file.")
-    return keys
-
-def classify_and_locate_objects(api_key: str, image_bytes: bytes):
+def classify_image(image: Image.Image):
     """
-    Detects all waste objects in an image, classifies them, and returns their coordinates.
-    This function configures the client on-the-fly for each request to support key rotation.
+    Analyzes an image to find and locate trash objects.
+
+    Args:
+        image: A PIL Image object.
+
+    Returns:
+        A dictionary containing the structured output from the AI.
     """
-    try:
-        # Configure the generative AI client with the specific key for this request
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-pro-latest')
+    
+    # This ensures the model uses the latest API key configured in the main app.
+    model = genai.GenerativeModel('gemini-2.0-flash')
 
-        pil_img = Image.open(io.BytesIO(image_bytes))
-        
-        prompt = """
-        You are an expert system for a recycling robot. Your task is to analyze the image and identify all pieces of waste.
+    prompt = """
+    Analyze the provided image from a robot's camera to identify and classify all pieces of waste.
 
-        Follow these steps precisely:
-        1.  **Identify Distinct 3D Objects:** Look for tangible, physical objects. You MUST IGNORE the flat surface they are resting on (e.g., paper, table, ground).
-        2.  **Classify Each Object:** Assign each object to one of the following categories:
-            *   `paper`: Paper, cardboard, newspapers.
-            *   `plastic`: Bottles, containers, bags, plastic items like markers.
-            *   `glass`: Glass bottles, jars.
-            *   `metal`: Cans, foil.
-            *   `E-waste`: Electronic waste. Anything with circuits, batteries, screens, or wires. Examples: remote controls, phones, keyboards, cables.
-            *   `organic`: Food scraps like fruit peels.
-            *   `other`: Waste that does not fit into the other categories.
-        3.  **Find Bounding Box:** For each object, determine the bounding box that encloses it. The box should be represented by four coordinates: [x_min, y_min, x_max, y_max].
-        4.  **Format the Output:** Return the data as a single, clean JSON object with no other text, comments, or markdown formatting.
+    Your task has two parts:
+    1.  **Locate Waste:** For each piece of trash, provide a normalized bounding box `[x_min, y_min, x_max, y_max]`.
+    2.  **Classify Waste:** Assign each piece of trash to one of the following strict categories. You MUST use one of these exact strings:
+        *   `paper`
+        *   `plastic`
+        *   `glass`
+        *   `metal`
+        *   `e-waste`
+        *   `organic`
+        *   `other`
 
-        **JSON Output Format:**
-        The JSON object must contain a key "objects_found" which is a list. Each item in the list represents one object and must have two keys: "label" and "box".
+    Respond with a single JSON object containing a key "trash_items", which is a list of objects.
+    Each object in the list must have two keys:
+    1.  "category": A string with one of the predefined categories listed above.
+    2.  "bounding_box": A list of four numbers for the normalized bounding box.
 
-        **Example:**
+    Example Response:
+    ```json
+    {
+      "trash_items": [
         {
-          "objects_found": [
-            { "label": "E-waste", "box": [290, 230, 400, 280] },
-            { "label": "plastic", "box": [480, 240, 650, 290] }
-          ]
+          "category": "plastic",
+          "bounding_box": [0.25, 0.4, 0.35, 0.6]
+        },
+        {
+          "category": "paper",
+          "bounding_box": [0.7, 0.5, 0.75, 0.58]
         }
+      ]
+    }
+    ```
 
-        If no waste is found, return the list as empty: `{"objects_found": []}`.
-        
-        Now, analyze the provided image.
-        """
-        
-        start_time = time.time()
-        response = model.generate_content([prompt, pil_img])
-        end_time = time.time()
-        
-        response_time = end_time - start_time
-        
-        # Use regex to find the JSON block, even with markdown backticks
-        json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
-        
-        if json_match:
-            json_string = json_match.group(0)
-            # The entire JSON object is the result
-            classification_data = json.loads(json_string)
-        else:
-            # Fallback if no JSON is found
-            classification_data = {"objects_found": [], "error": "No valid JSON found in model response"}
-
-        return {
-            "result": classification_data,
-            "response_time": f"{response_time:.2f}s"
-        }
-        
-    except (json.JSONDecodeError, Exception) as e:
-        # The 'response' object might not exist if genai.configure fails,
-        # so we need a more general error message here.
-        print(f"Error during classification or parsing: {str(e)}")
-        return {
-            "result": {"objects_found": [], "error": f"API call failed: {str(e)}"},
-            "response_time": "N/A"
-        } 
+    If no trash is visible, return an empty list: `{"trash_items": []}`.
+    """
+    
+    response = model.generate_content([prompt, image])
+    
+    # Clean up the response and parse it as JSON
+    # The response.text often comes wrapped in ```json ... ```
+    cleaned_text = response.text.strip().replace("```json", "").replace("```", "").strip()
+    try:
+        return json.loads(cleaned_text)
+    except json.JSONDecodeError:
+        print(f"Error: Could not decode JSON from response: {cleaned_text}")
+        # Return a structured error or an empty list
+        return {"error": "Failed to parse AI response", "raw_response": cleaned_text} 

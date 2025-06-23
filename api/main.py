@@ -1,79 +1,114 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
-import uvicorn
+from PIL import Image
+import io
+import os
+from dotenv import load_dotenv
+import google.generativeai as genai
 from contextlib import asynccontextmanager
 from . import classifier
-from itertools import cycle
+import uvicorn
+import time
 
-# --- API Version ---
-API_VERSION = "1.4.1"
-
-# Lifespan context manager to handle startup and shutdown events
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Load the API keys during startup
-    try:
-        api_keys = classifier.load_api_keys()
-        # Create a cycle iterator to rotate through the raw API keys
-        app.state.key_cycler = cycle(api_keys)
-        app.state.model_name = 'gemini-1.5-pro-latest' # We know the model name
-        print(f"INFO:     Successfully loaded {len(api_keys)} API keys.")
-    except ValueError as e:
-        print(f"ERROR:    {e}")
-        app.state.key_cycler = None
-        app.state.model_name = "N/A"
-    yield
-    # Clean up resources on shutdown (if any)
-    print("INFO:     Shutting down.")
+    # Load environment variables from .env file
+    load_dotenv()
+    api_keys = []
+    # Load primary key
+    key1 = os.getenv("GEMINI_API_KEY")
+    if key1:
+        api_keys.append(key1)
+    
+    # Load numbered keys (e.g., GEMINI_API_KEY_2, GEMINI_API_KEY_3)
+    i = 2
+    while True:
+        # Standard format GEMINI_API_KEY_NUM
+        key = os.getenv(f"GEMINI_API_KEY_{i}")
+        if not key:
+            # Fallback for format GEMINI_API_KEYNUM
+            key = os.getenv(f"GEMINI_API_KEY{i}")
 
+        if key:
+            api_keys.append(key)
+            i += 1
+        else:
+            break
+
+    app.state.api_keys = api_keys
+    app.state.current_key_index = 0
+    
+    if not app.state.api_keys:
+        print("Warning: No API keys found. Please set GEMINI_API_KEY and/or GEMINI_API_KEY_n in your .env file.")
+    else:
+        print(f"Successfully loaded {len(app.state.api_keys)} API keys.")
+        
+    yield
+    # Clean up resources if needed
+    print("Shutting down.")
 
 app = FastAPI(
-    title="AURo Waste Classifier API",
-    description="API for classifying waste items for the Autonomous Urban Recycler.",
-    version=API_VERSION,
+    title="AURo API",
+    description="AI-powered waste classification for the Autonomous Urban Recycler.",
+    version="1.4.3", # Version bump for the category fix
     lifespan=lifespan
 )
 
 @app.get("/")
 async def root():
-    return {"message": f"Welcome to the AURo Waste Classifier API! Version: {API_VERSION}"}
+    return {
+        "message": "Welcome to the AURo API!",
+        "version": app.version,
+        "docs_url": "/docs"
+    }
 
 @app.post("/classify/")
-async def classify_waste(file: UploadFile = File(...)):
-    if app.state.key_cycler is None:
-        raise HTTPException(status_code=500, detail="Gemini API keys not available. Check server logs.")
-
-    contents = await file.read()
-    if not contents:
-        raise HTTPException(status_code=400, detail="No image file uploaded.")
+async def classify_image_endpoint(file: UploadFile = File(...)):
+    if not app.state.api_keys:
+        raise HTTPException(status_code=500, detail="API keys not configured on the server.")
 
     try:
-        # Get the next API key from our rotating cycle
-        current_key = next(app.state.key_cycler)
-
-        # This now returns a dictionary with 'result' and 'response_time'
-        result_dict = classifier.classify_and_locate_objects(current_key, contents)
-
-        # The main result is now nested in the 'result' key
-        classification_result = result_dict.get("result", {})
+        # Get the next API key
+        key_index = app.state.current_key_index
+        api_key = app.state.api_keys[key_index]
         
-        if "error" in classification_result:
-             # Pass along any errors from the classifier
-             raise HTTPException(status_code=500, detail=classification_result["error"])
-        
-        # Add the model_used and response_time to the final response
-        final_response = {
-            "api_version": API_VERSION,
-            "model_used": app.state.model_name,
-            "response_time": result_dict.get("response_time", "N/A"),
-            **classification_result  # Unpack "objects_found"
-        }
-        return JSONResponse(content=final_response)
+        # Configure the genai client with the current key FOR THIS REQUEST
+        genai.configure(api_key=api_key)
 
+        # Rotate key index for the NEXT request
+        app.state.current_key_index = (key_index + 1) % len(app.state.api_keys)
+        print(f"Using API key index: {key_index}")
+
+        contents = await file.read()
+        pil_image = Image.open(io.BytesIO(contents))
+        
+        # Time the classifier call
+        start_time = time.time()
+        result = classifier.classify_image(pil_image)
+        end_time = time.time()
+        response_time = end_time - start_time
+
+        # Check if the classifier returned an error
+        if "error" in result:
+            raise HTTPException(status_code=500, detail=f"AI model error: {result['error']} (Raw: {result.get('raw_response', '')})")
+
+        return JSONResponse(content={
+            "api_version": app.version,
+            "model_used": "gemini-2.0-flash",
+            "response_time": f"{response_time:.2f}s",
+            **result
+        })
+
+    except HTTPException:
+        # Re-raise HTTPException to avoid being caught by the generic Exception handler
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An error occurred during classification: {str(e)}")
+        # Catch-all for other errors (e.g., image parsing)
+        print(f"Error during classification: {e}")
+        # When a 429 happens, the exception message is long.
+        if "429" in str(e):
+             raise HTTPException(status_code=429, detail="Quota exceeded for the current API key. Try again.")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 if __name__ == "__main__":
-    # The "api.main:app" string tells Uvicorn where to find the app object
-    # when using the reloader.
     uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True) 
