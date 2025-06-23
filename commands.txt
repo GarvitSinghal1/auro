@@ -1,5 +1,5 @@
 git add .
-git commit -m "A short description of my change"
+git commit -m "something"
 git push
 
 
