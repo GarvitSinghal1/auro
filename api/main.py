@@ -6,22 +6,21 @@ from . import classifier
 from itertools import cycle
 
 # --- API Version ---
-API_VERSION = "1.4.0"
+API_VERSION = "1.4.1"
 
 # Lifespan context manager to handle startup and shutdown events
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Load the model during startup
+    # Load the API keys during startup
     try:
         api_keys = classifier.load_api_keys()
-        models, model_name = classifier.setup_gemini(api_keys)
-        # Create a cycle iterator to rotate through models
-        app.state.model_cycler = cycle(models)
-        app.state.model_name = model_name
-        print(f"INFO:     Successfully loaded {len(models)} Gemini models.")
+        # Create a cycle iterator to rotate through the raw API keys
+        app.state.key_cycler = cycle(api_keys)
+        app.state.model_name = 'gemini-1.5-pro-latest' # We know the model name
+        print(f"INFO:     Successfully loaded {len(api_keys)} API keys.")
     except ValueError as e:
         print(f"ERROR:    {e}")
-        app.state.model_cycler = None
+        app.state.key_cycler = None
         app.state.model_name = "N/A"
     yield
     # Clean up resources on shutdown (if any)
@@ -41,19 +40,19 @@ async def root():
 
 @app.post("/classify/")
 async def classify_waste(file: UploadFile = File(...)):
-    if app.state.model_cycler is None:
-        raise HTTPException(status_code=500, detail="Gemini models not available. Check server logs for API key issues.")
+    if app.state.key_cycler is None:
+        raise HTTPException(status_code=500, detail="Gemini API keys not available. Check server logs.")
 
     contents = await file.read()
     if not contents:
         raise HTTPException(status_code=400, detail="No image file uploaded.")
 
     try:
-        # Get the next model from our rotating cycle
-        current_model = next(app.state.model_cycler)
+        # Get the next API key from our rotating cycle
+        current_key = next(app.state.key_cycler)
 
         # This now returns a dictionary with 'result' and 'response_time'
-        result_dict = classifier.classify_and_locate_objects(current_model, contents)
+        result_dict = classifier.classify_and_locate_objects(current_key, contents)
 
         # The main result is now nested in the 'result' key
         classification_result = result_dict.get("result", {})

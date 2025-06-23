@@ -58,12 +58,14 @@ def classify_frame(api_url, frame):
 def main():
     # The API URL is now fixed since we've deployed to Render.
     API_BASE_URL = "https://auro-l4mh.onrender.com"
+    # --- Add your phone's default IP here to avoid typing it every time ---
+    DEFAULT_PHONE_IP = "http://192.168.29.56:8080" 
 
     parser = argparse.ArgumentParser(description="Live tester for AURo classification API using a phone as an IP camera.")
-    parser.add_argument("--url", type=str, required=True, help="The full video stream URL from your IP camera app (e.g., http://192.168.1.10:8080/video)")
+    parser.add_argument("--ip", type=str, default=DEFAULT_PHONE_IP, help=f"The IP address and port of the phone camera (default: {DEFAULT_PHONE_IP})")
     args = parser.parse_args()
 
-    video_url = args.url
+    video_url = f"http://{args.ip}/video"
     classify_url = f"{API_BASE_URL}/classify/"
 
     print("--- AURo Live Tester ---")
