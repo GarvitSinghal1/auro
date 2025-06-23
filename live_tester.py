@@ -107,6 +107,30 @@ def main():
                 print("--- Classification Result ---")
                 print(result)
                 print("-----------------------------")
+                
+                # --- VISUAL VERIFICATION ---
+                # Draw the results on a copy of the resized frame
+                verification_frame = resized_frame.copy()
+                objects = result.get("objects_found", [])
+                
+                if objects:
+                    for obj in objects:
+                        x = obj.get("x")
+                        y = obj.get("y")
+                        label = obj.get("label", "unknown")
+                        
+                        if x is not None and y is not None:
+                            # Draw a circle at the center coordinate
+                            cv2.circle(verification_frame, (x, y), 20, (0, 255, 0), 2)
+                            # Put the label text near the circle
+                            cv2.putText(verification_frame, label, (x + 25, y + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                
+                    cv2.imshow("Verification - Press any key to close", verification_frame)
+                    cv2.waitKey(0) # Wait for a key press to close the verification window
+                    cv2.destroyWindow("Verification - Press any key to close")
+                else:
+                    print("No objects were found in the response.")
+
             else:
                 print("--- Classification Failed ---")
 

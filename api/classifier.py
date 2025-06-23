@@ -29,30 +29,35 @@ def classify_and_locate_objects(model: genai.GenerativeModel, image_bytes: bytes
     pil_img = Image.open(io.BytesIO(image_bytes))
     
     prompt = """
-    Analyze the provided image of a scene. Identify every piece of waste.
-    For each piece of waste, provide its classification and its center coordinates.
-    The categories are:
-    - paper
-    - plastic
-    - glass
-    - metal
-    - E-waste
-    - organic
-    - other
+    You are an expert system for a recycling robot. Your task is to analyze the image and identify all pieces of waste.
 
-    Return the data as a single, clean JSON object. The object should contain a single key "objects_found" which is a list of all detected items.
-    Each item in the list should be an object with three keys: "label" (the category), "x" (the horizontal coordinate of the center), and "y" (the vertical coordinate of the center).
-    Example response for an image with two items:
+    Follow these steps precisely:
+    1.  **Identify Distinct 3D Objects:** Look for tangible, physical objects. You MUST IGNORE the flat surface they are resting on (e.g., paper, table, ground).
+    2.  **Classify Each Object:** Assign each object to one of the following categories:
+        *   `paper`: Paper, cardboard, newspapers.
+        *   `plastic`: Bottles, containers, bags, plastic items like markers.
+        *   `glass`: Glass bottles, jars.
+        *   `metal`: Cans, foil.
+        *   `E-waste`: Electronic waste. Anything with circuits, batteries, screens, or wires. Examples: remote controls, phones, keyboards, cables.
+        *   `organic`: Food scraps like fruit peels.
+        *   `other`: Waste that does not fit into the other categories.
+    3.  **Find Center Coordinates:** For each object, determine the (x, y) pixel coordinates of the absolute visual center of its shape in the image.
+    4.  **Format the Output:** Return the data as a single, clean JSON object with no other text, comments, or markdown formatting.
+
+    **JSON Output Format:**
+    The JSON object must contain a key "objects_found" which is a list. Each item in the list represents one object and must have three keys: "label", "x", and "y".
+
+    **Example:**
     {
       "objects_found": [
-        { "label": "paper", "x": 120, "y": 450 },
-        { "label": "plastic", "x": 350, "y": 200 }
+        { "label": "E-waste", "x": 310, "y": 250 },
+        { "label": "plastic", "x": 500, "y": 260 }
       ]
     }
-    If no waste is found, return an empty list:
-    {
-      "objects_found": []
-    }
+
+    If no waste is found, return the list as empty: `{"objects_found": []}`.
+    
+    Now, analyze the provided image.
     """
     
     try:
