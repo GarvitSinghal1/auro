@@ -4,6 +4,9 @@ import uvicorn
 from contextlib import asynccontextmanager
 from . import classifier
 
+# --- API Version ---
+API_VERSION = "1.1.0"
+
 # Lifespan context manager to handle startup and shutdown events
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,13 +28,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AURo Waste Classifier API",
     description="API for classifying waste items for the Autonomous Urban Recycler.",
-    version="1.0.0",
+    version=API_VERSION,
     lifespan=lifespan
 )
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to the AURo Waste Classifier API!"}
+    return {"message": f"Welcome to the AURo Waste Classifier API! Version: {API_VERSION}"}
 
 @app.post("/classify/")
 async def classify_waste(file: UploadFile = File(...)):
@@ -55,6 +58,7 @@ async def classify_waste(file: UploadFile = File(...)):
         
         # Add the model_used and response_time to the final response
         final_response = {
+            "api_version": API_VERSION,
             "model_used": app.state.model_name,
             "response_time": result_dict.get("response_time", "N/A"),
             **classification_result  # Unpack "objects_found"
