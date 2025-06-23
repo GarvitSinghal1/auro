@@ -1,0 +1,14 @@
+# Core Computer Vision
+opencv-python
+Pillow
+numpy
+
+# Gemini AI
+google-generativeai
+python-dotenv
+
+# API Server
+fastapi
+uvicorn
+python-multipart
+gunicorn

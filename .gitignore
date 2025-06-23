@@ -1,0 +1,19 @@
+# --- Environment ---
+# Ignore the file containing our secret API key
+.env
+.env.example
+
+# --- Python ---
+# Ignore virtual environment folders
+venv/
+.venv/
+env/
+.env/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+
+# --- IDE/Editor ---
+# Ignore VS Code specific files
+.vscode/ 
