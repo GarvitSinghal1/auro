@@ -15,7 +15,9 @@ def setup_gemini():
         raise ValueError("ERROR: Please set your Gemini API key in a .env file.")
     try:
         genai.configure(api_key=api_key)
-        model_name = 'gemini-1.5-pro-preview-0514'
+        # Upgrading to a more powerful model for better accuracy.
+        # Using the "-latest" alias is more robust.
+        model_name = 'gemini-1.5-pro-latest'
         model = genai.GenerativeModel(model_name)
         return model, model_name
     except Exception as e:
