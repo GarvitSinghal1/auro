@@ -1,0 +1,18 @@
+{
+  "name": "auro-api",
+  "version": "1.0.0",
+  "description": "Waste classification API for the Autonomous Urban Recycler (AURo).",
+  "scripts": {
+    "start": "bash start.sh"
+  },
+  "engines": {
+    "python": "3.10.x"
+  },
+  "keywords": [
+    "fastapi",
+    "python",
+    "gemini",
+    "robotics"
+  ],
+  "author": "AURoTech"
+} 
