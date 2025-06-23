@@ -22,24 +22,37 @@ def setup_gemini():
         print(f"Error setting up Gemini: {str(e)}")
         raise
 
-def classify_image(model: genai.GenerativeModel, image_bytes: bytes):
+def classify_and_locate_objects(model: genai.GenerativeModel, image_bytes: bytes):
     """
-    Classifies the object in the image using the Gemini model and measures response time.
+    Detects all waste objects in an image, classifies them, and returns their coordinates.
     """
     pil_img = Image.open(io.BytesIO(image_bytes))
     
     prompt = """
-    Classify the object in this image into one of these categories:
+    Analyze the provided image of a scene. Identify every piece of waste.
+    For each piece of waste, provide its classification and its center coordinates.
+    The categories are:
     - paper
     - plastic
     - glass
     - metal
-    - nothing
     - E-waste
-    - mixed (and the categories of the objects in the image)
-    
-    Return ONLY the category name as a single-word JSON response, like {"classification": "plastic"}.
-    If the background is plain or empty, classify it as "nothing".
+    - organic
+    - other
+
+    Return the data as a single, clean JSON object. The object should contain a single key "objects_found" which is a list of all detected items.
+    Each item in the list should be an object with three keys: "label" (the category), "x" (the horizontal coordinate of the center), and "y" (the vertical coordinate of the center).
+    Example response for an image with two items:
+    {
+      "objects_found": [
+        { "label": "paper", "x": 120, "y": 450 },
+        { "label": "plastic", "x": 350, "y": 200 }
+      ]
+    }
+    If no waste is found, return an empty list:
+    {
+      "objects_found": []
+    }
     """
     
     try:
@@ -54,15 +67,14 @@ def classify_image(model: genai.GenerativeModel, image_bytes: bytes):
         
         if json_match:
             json_string = json_match.group(0)
-            # Parse the JSON to extract the actual classification
+            # The entire JSON object is the result
             classification_data = json.loads(json_string)
-            classification_text = classification_data.get("classification", "unknown")
         else:
             # Fallback if no JSON is found
-            classification_text = response.text.strip()
+            classification_data = {"objects_found": [], "error": "No valid JSON found in model response"}
 
         return {
-            "classification": classification_text,
+            "result": classification_data,
             "response_time": f"{response_time:.2f}s"
         }
         
@@ -70,6 +82,6 @@ def classify_image(model: genai.GenerativeModel, image_bytes: bytes):
         print(f"Error during classification or parsing: {str(e)}")
         # Return the raw text on failure for debugging
         return {
-            "classification": f"parsing_error: {response.text.strip()}",
+            "result": {"objects_found": [], "error": f"parsing_error: {response.text.strip()}"},
             "response_time": f"{time.time() - start_time:.2f}s"
         } 

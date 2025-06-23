@@ -43,16 +43,21 @@ async def classify_waste(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="No image file uploaded.")
 
     try:
-        # This now returns a dictionary
-        result_dict = classifier.classify_image(app.state.model, contents)
+        # This now returns a dictionary with 'result' and 'response_time'
+        result_dict = classifier.classify_and_locate_objects(app.state.model, contents)
 
-        if "error" in result_dict:
-             raise HTTPException(status_code=500, detail=result_dict["error"])
+        # The main result is now nested in the 'result' key
+        classification_result = result_dict.get("result", {})
         
-        # Add the model_used to the response and return
+        if "error" in classification_result:
+             # Pass along any errors from the classifier
+             raise HTTPException(status_code=500, detail=classification_result["error"])
+        
+        # Add the model_used and response_time to the final response
         final_response = {
             "model_used": app.state.model_name,
-            **result_dict  # Unpack the classification and response_time
+            "response_time": result_dict.get("response_time", "N/A"),
+            **classification_result  # Unpack "objects_found"
         }
         return JSONResponse(content=final_response)
 
