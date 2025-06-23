@@ -41,17 +41,17 @@ def classify_and_locate_objects(model: genai.GenerativeModel, image_bytes: bytes
         *   `E-waste`: Electronic waste. Anything with circuits, batteries, screens, or wires. Examples: remote controls, phones, keyboards, cables.
         *   `organic`: Food scraps like fruit peels.
         *   `other`: Waste that does not fit into the other categories.
-    3.  **Find Center Coordinates:** For each object, determine the (x, y) pixel coordinates of the absolute visual center of its shape in the image.
+    3.  **Find Bounding Box:** For each object, determine the bounding box that encloses it. The box should be represented by four coordinates: [x_min, y_min, x_max, y_max].
     4.  **Format the Output:** Return the data as a single, clean JSON object with no other text, comments, or markdown formatting.
 
     **JSON Output Format:**
-    The JSON object must contain a key "objects_found" which is a list. Each item in the list represents one object and must have three keys: "label", "x", and "y".
+    The JSON object must contain a key "objects_found" which is a list. Each item in the list represents one object and must have two keys: "label" and "box".
 
     **Example:**
     {
       "objects_found": [
-        { "label": "E-waste", "x": 310, "y": 250 },
-        { "label": "plastic", "x": 500, "y": 260 }
+        { "label": "E-waste", "box": [290, 230, 400, 280] },
+        { "label": "plastic", "box": [480, 240, 650, 290] }
       ]
     }
 

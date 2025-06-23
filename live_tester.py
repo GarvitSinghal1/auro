@@ -115,15 +115,15 @@ def main():
                 
                 if objects:
                     for obj in objects:
-                        x = obj.get("x")
-                        y = obj.get("y")
+                        box = obj.get("box")
                         label = obj.get("label", "unknown")
                         
-                        if x is not None and y is not None:
-                            # Draw a circle at the center coordinate
-                            cv2.circle(verification_frame, (x, y), 20, (0, 255, 0), 2)
-                            # Put the label text near the circle
-                            cv2.putText(verification_frame, label, (x + 25, y + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                        if box and len(box) == 4:
+                            x_min, y_min, x_max, y_max = box
+                            # Draw a rectangle using the bounding box coordinates
+                            cv2.rectangle(verification_frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
+                            # Put the label text near the top-left corner of the box
+                            cv2.putText(verification_frame, label, (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 
                     cv2.imshow("Verification - Press any key to close", verification_frame)
                     cv2.waitKey(0) # Wait for a key press to close the verification window
