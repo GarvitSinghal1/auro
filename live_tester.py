@@ -56,17 +56,19 @@ def classify_frame(api_url, frame):
         return None
 
 def main():
+    # The API URL is now fixed since we've deployed to Render.
+    API_BASE_URL = "https://auro-l4mh.onrender.com"
+
     parser = argparse.ArgumentParser(description="Live tester for AURo classification API using a phone as an IP camera.")
     parser.add_argument("--url", type=str, required=True, help="The full video stream URL from your IP camera app (e.g., http://192.168.1.10:8080/video)")
-    parser.add_argument("--api_url", type=str, required=True, help="The full base URL of the classification API (e.g., http://127.0.0.1:8000 or your ngrok URL)")
     args = parser.parse_args()
 
     video_url = args.url
-    classify_url = f"{args.api_url}/classify/"
+    classify_url = f"{API_BASE_URL}/classify/"
 
     print("--- AURo Live Tester ---")
     print(f"Attempting to connect to phone at: {video_url}")
-    print(f"Will send images to API at: {classify_url}")
+    print(f"Sending images to public API at: {API_BASE_URL}")
     print("\nPress SPACE to capture and classify a frame.")
     print("Press 'q' to quit.")
 
