@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from . import classifier
 
 # --- API Version ---
-API_VERSION = "1.2.0"
+API_VERSION = "1.3.0"
 
 # Lifespan context manager to handle startup and shutdown events
 @asynccontextmanager

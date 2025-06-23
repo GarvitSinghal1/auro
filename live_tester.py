@@ -122,12 +122,13 @@ def main():
                             x_min, y_min, x_max, y_max = box
                             # Draw a rectangle using the bounding box coordinates
                             cv2.rectangle(verification_frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
-                            # Put the label text near the top-left corner of the box
-                            cv2.putText(verification_frame, label, (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                            
+                            # Place text smartly so it's always visible
+                            text_y = y_min - 10 if y_min > 20 else y_min + 20
+                            cv2.putText(verification_frame, label, (x_min, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 
                     cv2.imshow("Verification - Press any key to close", verification_frame)
                     cv2.waitKey(0) # Wait for a key press to close the verification window
-                    cv2.destroyWindow("Verification - Press any key to close")
                 else:
                     print("No objects were found in the response.")
 
