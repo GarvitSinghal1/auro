@@ -6,23 +6,40 @@ import io
 import time
 import re
 import json
+from itertools import cycle
 
 load_dotenv()
 
-def setup_gemini():
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("ERROR: Please set your Gemini API key in a .env file.")
-    try:
-        genai.configure(api_key=api_key)
-        # Upgrading to a more powerful model for better accuracy.
+def load_api_keys():
+    """Loads all GEMINI_API_KEY_... from the environment and returns them as a list."""
+    keys = []
+    i = 1
+    while True:
+        key = os.getenv(f"GEMINI_API_KEY_{i}")
+        if key:
+            keys.append(key)
+            i += 1
+        else:
+            break
+    if not keys:
+        raise ValueError("ERROR: No GEMINI_API_KEY_... found in .env file.")
+    return keys
+
+def setup_gemini(api_keys):
+    """Initializes a list of Gemini models, one for each API key."""
+    models = []
+    for key in api_keys:
+        genai.configure(api_key=key, transport='rest')
         # Using the "-latest" alias is more robust.
         model_name = 'gemini-1.5-pro-latest'
         model = genai.GenerativeModel(model_name)
-        return model, model_name
-    except Exception as e:
-        print(f"Error setting up Gemini: {str(e)}")
-        raise
+        models.append(model)
+    
+    if not models:
+        raise ValueError("Could not initialize any Gemini models.")
+
+    model_name = 'gemini-1.5-pro-latest' # We assume all models are the same type
+    return models, model_name
 
 def classify_and_locate_objects(model: genai.GenerativeModel, image_bytes: bytes):
     """

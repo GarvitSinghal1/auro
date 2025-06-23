@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 from contextlib import asynccontextmanager
 from . import classifier
+from itertools import cycle
 
 # --- API Version ---
 API_VERSION = "1.3.1"
@@ -12,13 +13,15 @@ API_VERSION = "1.3.1"
 async def lifespan(app: FastAPI):
     # Load the model during startup
     try:
-        model, model_name = classifier.setup_gemini()
-        app.state.model = model
+        api_keys = classifier.load_api_keys()
+        models, model_name = classifier.setup_gemini(api_keys)
+        # Create a cycle iterator to rotate through models
+        app.state.model_cycler = cycle(models)
         app.state.model_name = model_name
-        print("INFO:     Gemini model loaded successfully.")
+        print(f"INFO:     Successfully loaded {len(models)} Gemini models.")
     except ValueError as e:
         print(f"ERROR:    {e}")
-        app.state.model = None
+        app.state.model_cycler = None
         app.state.model_name = "N/A"
     yield
     # Clean up resources on shutdown (if any)
@@ -38,16 +41,19 @@ async def root():
 
 @app.post("/classify/")
 async def classify_waste(file: UploadFile = File(...)):
-    if app.state.model is None:
-        raise HTTPException(status_code=500, detail="Gemini model is not available. Check server logs for API key issues.")
+    if app.state.model_cycler is None:
+        raise HTTPException(status_code=500, detail="Gemini models not available. Check server logs for API key issues.")
 
     contents = await file.read()
     if not contents:
         raise HTTPException(status_code=400, detail="No image file uploaded.")
 
     try:
+        # Get the next model from our rotating cycle
+        current_model = next(app.state.model_cycler)
+
         # This now returns a dictionary with 'result' and 'response_time'
-        result_dict = classifier.classify_and_locate_objects(app.state.model, contents)
+        result_dict = classifier.classify_and_locate_objects(current_model, contents)
 
         # The main result is now nested in the 'result' key
         classification_result = result_dict.get("result", {})
