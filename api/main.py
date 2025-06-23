@@ -6,7 +6,7 @@ from . import classifier
 from itertools import cycle
 
 # --- API Version ---
-API_VERSION = "1.3.1"
+API_VERSION = "1.4.0"
 
 # Lifespan context manager to handle startup and shutdown events
 @asynccontextmanager
