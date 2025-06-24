@@ -14,7 +14,7 @@ def classify_image(image: Image.Image):
     """
     
     # This ensures the model uses the latest API key configured in the main app.
-    model = genai.GenerativeModel('gemini-1.5-pro-latest')
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
     prompt = """
     Analyze the provided image from a robot's camera to identify and classify all pieces of waste.

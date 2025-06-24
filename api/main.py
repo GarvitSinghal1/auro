@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AURo API",
     description="AI-powered waste classification for the Autonomous Urban Recycler.",
-    version="1.4.4", # Switched to Pro model and improved prompt
+    version="1.4.5", # Reverted to Flash model due to Pro rate limits
     lifespan=lifespan
 )
 
@@ -94,7 +94,7 @@ async def classify_image_endpoint(file: UploadFile = File(...)):
 
         return JSONResponse(content={
             "api_version": app.version,
-            "model_used": "gemini-1.5-pro-latest",
+            "model_used": "gemini-1.5-flash-latest",
             "response_time": f"{response_time:.2f}s",
             **result
         })
