@@ -64,6 +64,9 @@ def classify_image(image: Image.Image, api_key: str, user_id: str, app_id: str):
             print(error_message)
             return {"error": error_message, "raw_response": str(post_model_outputs_response.status)}
 
+        # Add a print statement to log the raw response for debugging on Render
+        print(f"Clarifai raw response: {post_model_outputs_response}")
+
         # Parse Clarifai Response
         trash_items = []
         regions = post_model_outputs_response.outputs[0].data.regions
@@ -155,11 +158,4 @@ def classify_image(image: Image.Image, api_key: str, user_id: str, app_id: str):
 #     response = model.generate_content([prompt, image])
     
 #     # Clean up the response and parse it as JSON
-#     # The response.text often comes wrapped in ```json ... ```
-#     cleaned_text = response.text.strip().replace("```json", "").replace("```", "").strip()
-#     try:
-#         return json.loads(cleaned_text)
-#     except json.JSONDecodeError:
-#         print(f"Error: Could not decode JSON from response: {cleaned_text}")
-#         # Return a structured error or an empty list
-#         return {"error": "Failed to parse AI response", "raw_response": cleaned_text} 
+#     # The response.text often comes wrapped in ```
