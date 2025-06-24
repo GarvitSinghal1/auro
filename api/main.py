@@ -10,57 +10,28 @@ from . import classifier
 import uvicorn
 import time
 
+# Load environment variables at the very top to ensure they are available for all modules.
+load_dotenv()
+
+# Load the keys and IDs once on startup.
+CLARIFAI_API_KEY = os.getenv("CLARIFAI_API_KEY")
+CLARIFAI_USER_ID = os.getenv("CLARIFAI_USER_ID")
+CLARIFAI_APP_ID = os.getenv("CLARIFAI_APP_ID")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Load environment variables from .env file
-    load_dotenv()
-
-    # --- New: Load Clarifai API Key ---
-    clarifai_key = os.getenv("CLARIFAI_API_KEY")
-    if not clarifai_key:
-        print("Warning: CLARIFAI_API_KEY not found in .env file.")
+    # This is a good place for startup logic, like logging the key status.
+    if not all([CLARIFAI_API_KEY, CLARIFAI_USER_ID, CLARIFAI_APP_ID]):
+        print("Fatal: Clarifai credentials not fully configured in .env file. The API will not function.")
     else:
-        print("Successfully loaded Clarifai API key.")
-    # The key is used directly in the classifier module, so we don't need to store it in app.state
-
-    # --- Old: Gemini Key Loading (Commented Out) ---
-    # api_keys = []
-    # # Load primary key
-    # key1 = os.getenv("GEMINI_API_KEY")
-    # if key1:
-    #     api_keys.append(key1)
-    
-    # # Load numbered keys (e.g., GEMINI_API_KEY_2, GEMINI_API_KEY_3)
-    # i = 2
-    # while True:
-    #     # Standard format GEMINI_API_KEY_NUM
-    #     key = os.getenv(f"GEMINI_API_KEY_{i}")
-    #     if not key:
-    #         # Fallback for format GEMINI_API_KEYNUM
-    #         key = os.getenv(f"GEMINI_API_KEY{i}")
-
-    #     if key:
-    #         api_keys.append(key)
-    #         i += 1
-    #     else:
-    #         break
-
-    # app.state.api_keys = api_keys
-    # app.state.current_key_index = 0
-    
-    # if not app.state.api_keys:
-    #     print("Warning: No API keys found. Please set GEMINI_API_KEY and/or GEMINI_API_KEY_n in your .env file.")
-    # else:
-    #     print(f"Successfully loaded {len(app.state.api_keys)} API keys.")
-        
+        print("Clarifai credentials loaded successfully.")
     yield
-    # Clean up resources if needed
     print("Shutting down.")
 
 app = FastAPI(
     title="AURo API",
     description="AI-powered waste classification for the Autonomous Urban Recycler.",
-    version="1.5.0", # Switched backend to Clarifai
+    version="1.5.2", # Fix: Use correct Clarifai User/App IDs
     lifespan=lifespan
 )
 
@@ -74,32 +45,24 @@ async def root():
 
 @app.post("/classify/")
 async def classify_image_endpoint(file: UploadFile = File(...)):
-    # --- Old: Gemini Key Rotation (Commented Out) ---
-    # if not app.state.api_keys:
-    #     raise HTTPException(status_code=500, detail="API keys not configured on the server.")
+    if not all([CLARIFAI_API_KEY, CLARIFAI_USER_ID, CLARIFAI_APP_ID]):
+        raise HTTPException(status_code=500, detail="API credentials are not configured on the server.")
 
     try:
-        # # Get the next API key
-        # key_index = app.state.current_key_index
-        # api_key = app.state.api_keys[key_index]
-        
-        # # Configure the genai client with the current key FOR THIS REQUEST
-        # genai.configure(api_key=api_key)
-
-        # # Rotate key index for the NEXT request
-        # app.state.current_key_index = (key_index + 1) % len(app.state.api_keys)
-        # print(f"Using API key index: {key_index}")
-
         contents = await file.read()
         pil_image = Image.open(io.BytesIO(contents))
         
-        # Time the classifier call
         start_time = time.time()
-        result = classifier.classify_image(pil_image)
+        # Pass the loaded credentials to the classifier function
+        result = classifier.classify_image(
+            pil_image, 
+            api_key=CLARIFAI_API_KEY, 
+            user_id=CLARIFAI_USER_ID, 
+            app_id=CLARIFAI_APP_ID
+        )
         end_time = time.time()
         response_time = end_time - start_time
 
-        # Check if the classifier returned an error
         if "error" in result:
             raise HTTPException(status_code=500, detail=f"AI model error: {result['error']} (Raw: {result.get('raw_response', '')})")
 
@@ -111,10 +74,8 @@ async def classify_image_endpoint(file: UploadFile = File(...)):
         })
 
     except HTTPException:
-        # Re-raise HTTPException to avoid being caught by the generic Exception handler
         raise
     except Exception as e:
-        # Catch-all for other errors (e.g., image parsing)
         print(f"Error during classification: {e}")
         # --- Old: Gemini Quota Handling (Commented Out) ---
         # # When a 429 happens, the exception message is long.

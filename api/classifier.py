@@ -5,18 +5,8 @@ from clarifai_grpc.grpc.api.status import status_code_pb2
 from PIL import Image
 import io
 
-# --- New: Clarifai Configuration ---
-channel = ClarifaiChannel.get_grpc_channel()
-stub = service_pb2_grpc.V2Stub(channel)
-PAT = os.getenv("CLARIFAI_API_KEY")
-metadata = (('authorization', 'Key ' + PAT),)
-USER_ID = 'clarifai'
-APP_ID = 'main'
-MODEL_ID = 'general-image-detection'
-MODEL_VERSION_ID = '1580bb1932594c93b7e2e04456af7c6f'
-
-# This mapping helps translate the very specific concepts from the Clarifai
-# model into the broader categories our robot needs to understand.
+# This mapping helps translate the general concepts from the Clarifai model
+# into the broader categories our robot needs.
 CONCEPT_TO_CATEGORY_MAP = {
     # Paper
     "paper": "paper", "cardboard": "paper", "document": "paper", "newspaper": "paper",
@@ -34,11 +24,26 @@ CONCEPT_TO_CATEGORY_MAP = {
     "pen": "other", "pencil": "other"
 }
 
-def classify_image(image: Image.Image):
+def classify_image(image: Image.Image, api_key: str, user_id: str, app_id: str):
     """
     Analyzes an image using the Clarifai General Detection model to find and locate trash.
+    
+    Args:
+        image: A PIL Image object.
+        api_key: The Clarifai Personal Access Token (PAT).
+        user_id: The Clarifai User ID.
+        app_id: The Clarifai App ID.
     """
     try:
+        # Initialize the Clarifai client within the function call
+        channel = ClarifaiChannel.get_grpc_channel()
+        stub = service_pb2_grpc.V2Stub(channel)
+        metadata = (('authorization', 'Key ' + api_key),)
+        
+        # Define the model details
+        MODEL_ID = 'general-image-detection'
+        MODEL_VERSION_ID = '1580bb1932594c93b7e2e04456af7c6f'
+
         # Convert PIL image to bytes
         byte_arr = io.BytesIO()
         image.save(byte_arr, format='JPEG')
@@ -46,7 +51,7 @@ def classify_image(image: Image.Image):
 
         post_model_outputs_response = stub.PostModelOutputs(
             service_pb2.PostModelOutputsRequest(
-                user_app_id=resources_pb2.UserAppIDSet(user_id=USER_ID, app_id=APP_ID),
+                user_app_id=resources_pb2.UserAppIDSet(user_id=user_id, app_id=app_id),
                 model_id=MODEL_ID,
                 version_id=MODEL_VERSION_ID,
                 inputs=[resources_pb2.Input(data=resources_pb2.Data(image=resources_pb2.Image(base64=image_bytes)))]
@@ -57,13 +62,12 @@ def classify_image(image: Image.Image):
         if post_model_outputs_response.status.code != status_code_pb2.SUCCESS:
             error_message = f"Clarifai API error: {post_model_outputs_response.status.description}"
             print(error_message)
-            return {"error": error_message, "raw_response": post_model_outputs_response.status}
+            return {"error": error_message, "raw_response": str(post_model_outputs_response.status)}
 
-        # --- New: Parse Clarifai Response ---
+        # Parse Clarifai Response
         trash_items = []
         regions = post_model_outputs_response.outputs[0].data.regions
         for region in regions:
-            # Get the top concept for the region
             if not region.data.concepts:
                 continue
             
@@ -71,13 +75,11 @@ def classify_image(image: Image.Image):
             concept_name = top_concept.name
             confidence = top_concept.value
 
-            # Check if the detected concept is in our mapping and has high enough confidence
+            # Filter based on our concept map and a confidence threshold
             if concept_name in CONCEPT_TO_CATEGORY_MAP and confidence > 0.8:
                 category = CONCEPT_TO_CATEGORY_MAP[concept_name]
                 box = region.region_info.bounding_box
                 
-                # The bounding box is already normalized: [left_col, top_row, right_col, bottom_row]
-                # This corresponds to our [x_min, y_min, x_max, y_max] format.
                 trash_items.append({
                     "category": category,
                     "bounding_box": [box.left_col, box.top_row, box.right_col, box.bottom_row]
