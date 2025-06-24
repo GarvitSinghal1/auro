@@ -30,35 +30,40 @@ graph TD;
     end
 
     subgraph "Cloud Services"
-        C[FastAPI on Render] <--> D[Clarifai AI API];
+        C[AURo FastAPI on Render] --> D[Clarifai AI for Detection];
+        C --> E[Gemini AI for Vision Analysis];
     end
 
-    B --sends image--> C;
-    C --gets classification--> B;
+    B --sends full image--> C;
+    C --1. gets object location--> D;
+    C --2. sends cropped image--> E;
+    E --3. returns material type--> C;
+    C --sends final result--> B;
 ```
 
-1.  **Capture:** The `live_tester.py` script connects to a live video feed (like a phone running an IP camera app) to capture images.
-2.  **Send:** When you press the spacebar, the script sends the current frame to our public API, which is hosted on Render.
-3.  **Analyze:** The API takes the image and sends it to the **Clarifai AI** model, which is a powerful, pre-trained model specifically for object detection.
-4.  **Receive:** The API gets the results back from Clarifai, including bounding boxes (the `[x, y, w, h]` coordinates of the object) and a category (like "paper" or "plastic").
-5.  **Display:** The `live_tester.py` script receives this information and draws the bounding box and label directly onto the image, so you can see what the AI found in real-time.
+1.  **Capture:** The `live_tester.py` script captures an image.
+2.  **Send to API:** The script sends the full image to our public API on Render.
+3.  **Step 1: Detect with Clarifai:** The API first sends the image to Clarifai's General Detection model. Clarifai's job is to find the *location* of all potential objects in the scene and return their bounding boxes.
+4.  **Step 2: Crop and Analyze with Gemini:** For each high-confidence object found by Clarifai, our API crops the original image to that object's bounding box. It then sends this small, focused image to the **Gemini Vision** model and asks, "What material is this object made of?"
+5.  **Combine and Respond:** The API collects the material classifications from Gemini and combines them with the corresponding bounding boxes from Clarifai.
+6.  **Display:** The `live_tester.py` script receives this final, highly accurate data and draws the correct category and bounding box on the screen for verification.
 
 ---
 
 ## ✨ Current Features
 
+- **Advanced Hybrid AI:** Uses a powerful two-stage process. **Clarifai** is used for fast, efficient object detection, and **Gemini Vision** is used for accurate, vision-based material analysis on cropped images.
 - **Waste Detection API:** A robust backend built with **FastAPI** that can receive an image and return a list of detected waste items.
-- **AI-Powered Classification:** Uses the **Clarifai General Detection model** to find and categorize objects. It can identify items and map them to our specific categories: `paper`, `plastic`, `glass`, `metal`, `e-waste`, `organic`, and `other`.
 - **Publicly Deployed:** The API is live and accessible on the internet, deployed on **Render**. You can access it at [https://auro-l4mh.onrender.com](https://auro-l4mh.onrender.com).
 - **Live Testing Script:** The `live_tester.py` script allows for real-time testing using a phone as an IP camera.
-- **Visual Verification:** The tester script draws the bounding boxes returned by the API directly onto the captured frame, providing instant visual feedback on the AI's accuracy.
+- **Detailed Debug Output:** The API response includes a `debug_info` object showing the full pipeline, including what Clarifai detected and how Gemini classified each object.
 
 ---
 
 ## 💻 Technology Used
 
-- **Backend:** Python, FastAPI, Gunicorn, Uvicorn
-- **AI / Computer Vision:** Clarifai API, OpenCV
+- **Backend:** Python, FastAPI, Gunicorn
+- **AI / Computer Vision:** Clarifai API (for detection), Gemini API (for vision analysis), OpenCV
 - **Deployment:** Render, GitHub (for CI/CD)
 - **Utilities:** `python-dotenv` for managing environment variables.
 
@@ -95,21 +100,25 @@ pip install -r requirements.txt
 
 ### 3. Set Up Your API Credentials
 
-The project needs API keys to talk to the Clarifai service.
+The project needs API keys to talk to the Clarifai and Gemini services.
 
-1.  Create a file named `.env` in the main project directory.
-2.  Copy the contents of `.env.example` into your new `.env` file.
-3.  **Get your Clarifai Credentials:**
+1.  Create a file named `.env` in the main project directory. If you don't have one, you can copy `.env.example`.
+2.  **Get your Clarifai Credential:**
     - Go to [Clarifai](https://clarifai.com/signup) and create a free account.
-    - Create a new application.
-    - Find your **User ID** and **App ID** from your application's URL or page. The URL looks like `https://clarifai.com/YOUR_USER_ID/apps/YOUR_APP_ID`.
-    - Create a **Personal Access Token (PAT)** in your account settings. This is your API key.
+    - In your account settings, create a **Personal Access Token (PAT)**. This is your API key.
+3.  **Get your Gemini Credentials:**
+    - Go to [Google AI Studio](https://aistudio.google.com/app/apikey) and create an API key. You can create more than one key to increase your daily usage limits.
 4.  Fill in the values in your `.env` file:
     ```env
     # .env file
-    CLARIFAI_API_KEY="your_personal_access_token_here"
-    CLARIFAI_USER_ID="your_user_id_here"
-    CLARIFAI_APP_ID="your_app_id_here"
+
+    # Clarifai Key
+    CLARIFAI_API_KEY="your_clarifai_personal_access_token"
+
+    # Gemini Keys (add more as needed)
+    GEMINI_API_KEY="your_first_gemini_api_key"
+    GEMINI_API_KEY_2="your_second_gemini_api_key"
+    # GEMINI_API_KEY_3="..."
     ```
 
 ---
@@ -155,7 +164,7 @@ This is a list of planned features and improvements for the AURo project.
 
 - [ ] **Hardware Integration:** Connect the software to the physical robot's ESP32-CAM and servo motors.
 - [ ] **Servo Control Logic:** Implement the code that tells the servos where to move based on the classification result.
-- [ ] **Improve Classification Mapping:** Expand the `CONCEPT_TO_CATEGORY_MAP` in `api/classifier.py` to recognize a wider variety of waste items with higher accuracy.
-- [ ] **Train a Custom Model:** For ultimate performance, collect our own images and train a custom Clarifai model specifically on the types of waste AURo will encounter.
+- [ ] **Fine-Tune Confidence:** Adjust the `CONFIDENCE_THRESHOLD` in `api/classifier.py` to find the perfect balance between sensitivity and accuracy for your specific environment.
+- [ ] **Train a Custom Detection Model:** For even better performance, replace the general Clarifai model with a custom one trained only on images of waste. This would make the initial detection step faster and more accurate.
 - [ ] **Web-Based Interface:** Create a simple web page for uploading images and seeing results, as an alternative to the Python script.
 - [ ] **Error Handling:** Improve robustness for edge cases, such as when the lighting is poor or no objects are found. 

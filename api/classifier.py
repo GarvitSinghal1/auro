@@ -1,98 +1,149 @@
 import os
+import json
+from PIL import Image
+import io
+
+# Clarifai imports for object detection
 from clarifai_grpc.channel.clarifai_channel import ClarifaiChannel
 from clarifai_grpc.grpc.api import resources_pb2, service_pb2, service_pb2_grpc
 from clarifai_grpc.grpc.api.status import status_code_pb2
-from PIL import Image
-import io
+
+# Gemini import for visual analysis
+import google.generativeai as genai
 
 # This mapping helps translate the general concepts from the Clarifai model
 # into the broader categories our robot needs.
 CONCEPT_TO_CATEGORY_MAP = {
-    # Paper
+    # --- Paper ---
     "paper": "paper", "cardboard": "paper", "document": "paper", "newspaper": "paper", "box": "paper",
-    # Plastic
-    "plastic": "plastic", "bottle": "plastic", "plastic bag": "plastic", "container": "plastic", "cup": "plastic",
-    # Glass
+    "magazine": "paper", "envelope": "paper", "notebook": "paper", "pamphlet": "paper",
+
+    # --- Plastic ---
+    "plastic": "plastic", "bottle": "plastic", "plastic bag": "plastic", "container": "plastic",
+    "cup": "plastic", "lid": "plastic", "wrapper": "plastic", "styrofoam": "plastic", "bottle cap": "plastic",
+
+    # --- Glass ---
     "glass": "glass", "glass bottle": "glass", "jar": "glass",
-    # Metal
+
+    # --- Metal ---
     "metal": "metal", "can": "metal", "aluminum": "metal", "foil": "metal", "tin can": "metal",
-    # E-waste
-    "electronic": "e-waste", "cable": "e-waste", "remote control": "e-waste", "device": "e-waste", "cell phone": "e-waste", "circuit": "e-waste",
-    # Organic
-    "food": "organic", "fruit": "organic", "vegetable": "organic", "banana": "organic", "peel": "organic", "apple": "organic",
-    # Other
-    "pen": "other", "pencil": "other"
+    "key": "metal", "scrap metal": "metal",
+
+    # --- E-waste ---
+    "electronic": "e-waste", "cable": "e-waste", "remote control": "e-waste", "device": "e-waste",
+    "cell phone": "e-waste", "circuit": "e-waste", "computer mouse": "e-waste", "mouse": "e-waste",
+    "keyboard": "e-waste", "screen": "e-waste", "battery": "e-waste", "plug": "e-waste",
+
+    # --- Organic ---
+    "food": "organic", "fruit": "organic", "vegetable": "organic", "banana": "organic",
+    "peel": "organic", "apple": "organic", "food scrap": "organic",
+
+    # --- Other ---
+    "pen": "other", "pencil": "other", "fabric": "other", "wood": "other"
 }
 
-def classify_image(image: Image.Image, api_key: str, user_id: str, app_id: str):
+def _get_material_from_gemini(cropped_image: Image.Image, api_key: str) -> str:
     """
-    Analyzes an image using the Clarifai General Detection model to find and locate trash.
-    
-    Args:
-        image: A PIL Image object.
-        api_key: The Clarifai Personal Access Token (PAT).
-        user_id: The Clarifai User ID.
-        app_id: The Clarifai App ID.
+    Uses Gemini Vision to classify a cropped image by its material.
+    """
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
+
+    prompt = """
+    Analyze the object in this image and classify it by its primary material.
+    You MUST respond with a single word from this strict list:
+    `paper`, `plastic`, `glass`, `metal`, `e-waste`, `organic`, `other`.
+
+    Do not provide any explanation or other text. Just the single-word category.
     """
     try:
-        # Initialize the Clarifai client within the function call
+        response = model.generate_content([prompt, cropped_image])
+        category = response.text.strip().lower()
+        # Basic validation to ensure the model returns a valid category
+        valid_categories = {'paper', 'plastic', 'glass', 'metal', 'e-waste', 'organic', 'other'}
+        if category in valid_categories:
+            return category
+        else:
+            return "other" # Default to 'other' if the response is invalid
+    except Exception as e:
+        print(f"Error during Gemini material analysis: {e}")
+        return "error"
+
+def classify_image(image: Image.Image, clarifai_pat: str, gemini_api_key: str):
+    """
+    Orchestrates a two-step "crop and classify" process:
+    1. Detects objects and their bounding boxes using Clarifai.
+    2. For each detected object, crops it and sends the image to Gemini for material classification.
+    """
+    CONFIDENCE_THRESHOLD = 0.60
+    trash_items = []
+    debug_info = {
+        "confidence_threshold": CONFIDENCE_THRESHOLD,
+        "clarifai_detections": [],
+        "final_classifications": []
+    }
+
+    # --- Step 1: Detect object locations with Clarifai ---
+    try:
         channel = ClarifaiChannel.get_grpc_channel()
         stub = service_pb2_grpc.V2Stub(channel)
-        metadata = (('authorization', 'Key ' + api_key),)
+        metadata = (('authorization', 'Key ' + clarifai_pat),)
         
-        # Define the model details
-        MODEL_ID = 'general-image-detection'
-        MODEL_VERSION_ID = '1580bb1932594c93b7e2e04456af7c6f'
-
-        # Convert PIL image to bytes
         byte_arr = io.BytesIO()
         image.save(byte_arr, format='JPEG')
-        image_bytes = byte_arr.getvalue()
 
         post_model_outputs_response = stub.PostModelOutputs(
             service_pb2.PostModelOutputsRequest(
-                user_app_id=resources_pb2.UserAppIDSet(user_id=user_id, app_id=app_id),
-                model_id=MODEL_ID,
-                version_id=MODEL_VERSION_ID,
-                inputs=[resources_pb2.Input(data=resources_pb2.Data(image=resources_pb2.Image(base64=image_bytes)))]
+                user_app_id=resources_pb2.UserAppIDSet(user_id="clarifai", app_id="main"),
+                model_id='general-image-detection',
+                version_id='1580bb1932594c93b7e2e04456af7c6f',
+                inputs=[resources_pb2.Input(data=resources_pb2.Data(image=resources_pb2.Image(base64=byte_arr.getvalue())))]
             ),
             metadata=metadata
         )
 
         if post_model_outputs_response.status.code != status_code_pb2.SUCCESS:
-            error_message = f"Clarifai API error: {post_model_outputs_response.status.description}"
-            print(error_message)
-            return {"error": error_message, "raw_response": str(post_model_outputs_response.status)}
+            return {"error": f"Clarifai API error: {post_model_outputs_response.status.description}"}
 
-        # Add a print statement to log the raw response for debugging on Render
-        print(f"Clarifai raw response: {post_model_outputs_response}")
-
-        # Parse Clarifai Response
-        trash_items = []
-        regions = post_model_outputs_response.outputs[0].data.regions
-        for region in regions:
-            if not region.data.concepts:
-                continue
-            
-            top_concept = region.data.concepts[0]
-            concept_name = top_concept.name
-            confidence = top_concept.value
-
-            # Filter based on our concept map and a confidence threshold
-            if concept_name in CONCEPT_TO_CATEGORY_MAP and confidence > 0.7:
-                category = CONCEPT_TO_CATEGORY_MAP[concept_name]
-                box = region.region_info.bounding_box
-                
-                trash_items.append({
-                    "category": category,
-                    "bounding_box": [box.left_col, box.top_row, box.right_col, box.bottom_row]
-                })
-
-        return {"trash_items": trash_items}
+        high_confidence_regions = []
+        for region in post_model_outputs_response.outputs[0].data.regions:
+            concept = region.data.concepts[0]
+            confidence = concept.value
+            debug_info["clarifai_detections"].append({"name": concept.name.lower(), "confidence": f"{confidence:.2f}"})
+            if confidence > CONFIDENCE_THRESHOLD:
+                high_confidence_regions.append(region)
 
     except Exception as e:
-        print(f"An error occurred during Clarifai classification: {str(e)}")
-        return {"error": "An internal error occurred with the classification service."}
+        return {"error": f"An internal error occurred during Clarifai detection: {str(e)}"}
+
+    # --- Step 2: Crop and Classify each detected object with Gemini ---
+    if not high_confidence_regions:
+        debug_info["final_classifications"].append("No objects passed confidence threshold.")
+        return {"trash_items": [], "debug_info": debug_info}
+
+    img_width, img_height = image.size
+    for region in high_confidence_regions:
+        box = region.region_info.bounding_box
+        
+        left = int(box.left_col * img_width)
+        top = int(box.top_row * img_height)
+        right = int(box.right_col * img_width)
+        bottom = int(box.bottom_row * img_height)
+        
+        cropped_image = image.crop((left, top, right, bottom))
+        
+        category = _get_material_from_gemini(cropped_image, gemini_api_key)
+        
+        clarifai_name = region.data.concepts[0].name.lower()
+        debug_info["final_classifications"].append({"clarifai_name": clarifai_name, "gemini_category": category})
+
+        if category != "error":
+            trash_items.append({
+                "category": category,
+                "bounding_box": [box.left_col, box.top_row, box.right_col, box.bottom_row]
+            })
+
+    return {"trash_items": trash_items, "debug_info": debug_info}
 
 
 # --- Old: Gemini Classifier (Commented Out) ---
