@@ -41,7 +41,7 @@ def classify_frame(api_url, frame):
         files = {'file': ('image.jpg', buffer.tobytes(), 'image/jpeg')}
         
         # Send the request
-        response = requests.post(api_url, files=files, timeout=10)
+        response = requests.post(api_url, files=files, timeout=30)
         
         # Check for successful response
         response.raise_for_status()

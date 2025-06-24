@@ -9,17 +9,17 @@ import io
 # into the broader categories our robot needs.
 CONCEPT_TO_CATEGORY_MAP = {
     # Paper
-    "paper": "paper", "cardboard": "paper", "document": "paper", "newspaper": "paper",
+    "paper": "paper", "cardboard": "paper", "document": "paper", "newspaper": "paper", "box": "paper",
     # Plastic
-    "plastic": "plastic", "bottle": "plastic", "plastic bag": "plastic", "container": "plastic",
+    "plastic": "plastic", "bottle": "plastic", "plastic bag": "plastic", "container": "plastic", "cup": "plastic",
     # Glass
-    "glass": "glass", "glass bottle": "glass",
+    "glass": "glass", "glass bottle": "glass", "jar": "glass",
     # Metal
-    "metal": "metal", "can": "metal", "aluminum": "metal", "foil": "metal",
+    "metal": "metal", "can": "metal", "aluminum": "metal", "foil": "metal", "tin can": "metal",
     # E-waste
-    "electronic": "e-waste", "cable": "e-waste", "remote control": "e-waste", "device": "e-waste", "cell phone": "e-waste",
+    "electronic": "e-waste", "cable": "e-waste", "remote control": "e-waste", "device": "e-waste", "cell phone": "e-waste", "circuit": "e-waste",
     # Organic
-    "food": "organic", "fruit": "organic", "vegetable": "organic",
+    "food": "organic", "fruit": "organic", "vegetable": "organic", "banana": "organic", "peel": "organic", "apple": "organic",
     # Other
     "pen": "other", "pencil": "other"
 }
@@ -76,7 +76,7 @@ def classify_image(image: Image.Image, api_key: str, user_id: str, app_id: str):
             confidence = top_concept.value
 
             # Filter based on our concept map and a confidence threshold
-            if concept_name in CONCEPT_TO_CATEGORY_MAP and confidence > 0.8:
+            if concept_name in CONCEPT_TO_CATEGORY_MAP and confidence > 0.7:
                 category = CONCEPT_TO_CATEGORY_MAP[concept_name]
                 box = region.region_info.bounding_box
                 

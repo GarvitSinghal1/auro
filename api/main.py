@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AURo API",
     description="AI-powered waste classification for the Autonomous Urban Recycler.",
-    version="1.5.2", # Fix: Use correct Clarifai User/App IDs
+    version="1.5.3", # Tuned Clarifai confidence and expanded concepts
     lifespan=lifespan
 )
 
