@@ -6,6 +6,7 @@ numpy
 # Gemini AI
 google-generativeai
 python-dotenv
+clarifai
 
 # API Server
 fastapi

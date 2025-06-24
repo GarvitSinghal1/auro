@@ -4,7 +4,7 @@ from PIL import Image
 import io
 import os
 from dotenv import load_dotenv
-import google.generativeai as genai
+# import google.generativeai as genai (No longer needed here)
 from contextlib import asynccontextmanager
 from . import classifier
 import uvicorn
@@ -14,34 +14,44 @@ import time
 async def lifespan(app: FastAPI):
     # Load environment variables from .env file
     load_dotenv()
-    api_keys = []
-    # Load primary key
-    key1 = os.getenv("GEMINI_API_KEY")
-    if key1:
-        api_keys.append(key1)
-    
-    # Load numbered keys (e.g., GEMINI_API_KEY_2, GEMINI_API_KEY_3)
-    i = 2
-    while True:
-        # Standard format GEMINI_API_KEY_NUM
-        key = os.getenv(f"GEMINI_API_KEY_{i}")
-        if not key:
-            # Fallback for format GEMINI_API_KEYNUM
-            key = os.getenv(f"GEMINI_API_KEY{i}")
 
-        if key:
-            api_keys.append(key)
-            i += 1
-        else:
-            break
-
-    app.state.api_keys = api_keys
-    app.state.current_key_index = 0
-    
-    if not app.state.api_keys:
-        print("Warning: No API keys found. Please set GEMINI_API_KEY and/or GEMINI_API_KEY_n in your .env file.")
+    # --- New: Load Clarifai API Key ---
+    clarifai_key = os.getenv("CLARIFAI_API_KEY")
+    if not clarifai_key:
+        print("Warning: CLARIFAI_API_KEY not found in .env file.")
     else:
-        print(f"Successfully loaded {len(app.state.api_keys)} API keys.")
+        print("Successfully loaded Clarifai API key.")
+    # The key is used directly in the classifier module, so we don't need to store it in app.state
+
+    # --- Old: Gemini Key Loading (Commented Out) ---
+    # api_keys = []
+    # # Load primary key
+    # key1 = os.getenv("GEMINI_API_KEY")
+    # if key1:
+    #     api_keys.append(key1)
+    
+    # # Load numbered keys (e.g., GEMINI_API_KEY_2, GEMINI_API_KEY_3)
+    # i = 2
+    # while True:
+    #     # Standard format GEMINI_API_KEY_NUM
+    #     key = os.getenv(f"GEMINI_API_KEY_{i}")
+    #     if not key:
+    #         # Fallback for format GEMINI_API_KEYNUM
+    #         key = os.getenv(f"GEMINI_API_KEY{i}")
+
+    #     if key:
+    #         api_keys.append(key)
+    #         i += 1
+    #     else:
+    #         break
+
+    # app.state.api_keys = api_keys
+    # app.state.current_key_index = 0
+    
+    # if not app.state.api_keys:
+    #     print("Warning: No API keys found. Please set GEMINI_API_KEY and/or GEMINI_API_KEY_n in your .env file.")
+    # else:
+    #     print(f"Successfully loaded {len(app.state.api_keys)} API keys.")
         
     yield
     # Clean up resources if needed
@@ -50,7 +60,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AURo API",
     description="AI-powered waste classification for the Autonomous Urban Recycler.",
-    version="1.4.7", # Prompt fix: Ignore surfaces
+    version="1.5.0", # Switched backend to Clarifai
     lifespan=lifespan
 )
 
@@ -64,20 +74,21 @@ async def root():
 
 @app.post("/classify/")
 async def classify_image_endpoint(file: UploadFile = File(...)):
-    if not app.state.api_keys:
-        raise HTTPException(status_code=500, detail="API keys not configured on the server.")
+    # --- Old: Gemini Key Rotation (Commented Out) ---
+    # if not app.state.api_keys:
+    #     raise HTTPException(status_code=500, detail="API keys not configured on the server.")
 
     try:
-        # Get the next API key
-        key_index = app.state.current_key_index
-        api_key = app.state.api_keys[key_index]
+        # # Get the next API key
+        # key_index = app.state.current_key_index
+        # api_key = app.state.api_keys[key_index]
         
-        # Configure the genai client with the current key FOR THIS REQUEST
-        genai.configure(api_key=api_key)
+        # # Configure the genai client with the current key FOR THIS REQUEST
+        # genai.configure(api_key=api_key)
 
-        # Rotate key index for the NEXT request
-        app.state.current_key_index = (key_index + 1) % len(app.state.api_keys)
-        print(f"Using API key index: {key_index}")
+        # # Rotate key index for the NEXT request
+        # app.state.current_key_index = (key_index + 1) % len(app.state.api_keys)
+        # print(f"Using API key index: {key_index}")
 
         contents = await file.read()
         pil_image = Image.open(io.BytesIO(contents))
@@ -94,7 +105,7 @@ async def classify_image_endpoint(file: UploadFile = File(...)):
 
         return JSONResponse(content={
             "api_version": app.version,
-            "model_used": "gemini-1.5-flash-latest",
+            "model_used": "clarifai-general-detection",
             "response_time": f"{response_time:.2f}s",
             **result
         })
@@ -105,9 +116,10 @@ async def classify_image_endpoint(file: UploadFile = File(...)):
     except Exception as e:
         # Catch-all for other errors (e.g., image parsing)
         print(f"Error during classification: {e}")
-        # When a 429 happens, the exception message is long.
-        if "429" in str(e):
-             raise HTTPException(status_code=429, detail="Quota exceeded for the current API key. Try again.")
+        # --- Old: Gemini Quota Handling (Commented Out) ---
+        # # When a 429 happens, the exception message is long.
+        # if "429" in str(e):
+        #      raise HTTPException(status_code=429, detail="Quota exceeded for the current API key. Try again.")
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 if __name__ == "__main__":
