@@ -1,6 +1,6 @@
 # AURo - The Autonomous Urban Recycler
 
-[![API Status](https://img.shields.io/website?down_message=offline&label=API&up_message=online&url=https%3A%2F%2Fauro-l4mh.onrender.com)](https://auro-l4mh.onrender.com)
+[![API Status](https://img.shields.io/website?down_message=offline&label=API&up_message=online&url=https%3A%2F%2Fauro-l4mh.onrender.com%2Fhealth)](https://auro-l4mh.onrender.com)
 
 This repository contains the complete AI-powered backend and testing software for the Autonomous Urban Recycler (AURo) project. AURo is a robot designed to automatically identify and sort different types of waste.
 

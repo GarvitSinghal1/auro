@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from PIL import Image
@@ -75,17 +75,21 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AURo API",
     description="AI-powered waste classification for the Autonomous Urban Recycler.",
-    version="1.7.2", # Added response models for documentation
+    version="1.7.3", # Added health check endpoint for status badge
     lifespan=lifespan
 )
 
-@app.get("/")
+@app.get("/", include_in_schema=False) # Hide from docs
 async def root():
-    return {
-        "message": "Welcome to the AURo API!",
-        "version": app.version,
-        "docs_url": "/docs"
-    }
+    return { "message": "Welcome to the AURo API!", "version": app.version, "docs_url": "/docs" }
+
+@app.get("/health", response_class=PlainTextResponse)
+async def health_check():
+    """
+    A simple health check endpoint that returns "OK" with a 200 status code.
+    Used by monitoring services to confirm the API is live.
+    """
+    return "OK"
 
 @app.post("/classify/", response_model=ClassificationResponse)
 async def classify_image_endpoint(file: UploadFile = File(...)):
