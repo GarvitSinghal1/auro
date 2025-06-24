@@ -18,10 +18,10 @@ def classify_image(image: Image.Image):
 
     prompt = """
     Analyze the provided image from a robot's camera to identify and classify all pieces of waste.
-    Your goal is to be as accurate as possible.
+    Your goal is to be as accurate as possible. Carefully check for multiple distinct objects.
 
     Your task has two parts:
-    1.  **Locate Waste:** For each piece of trash, provide a normalized bounding box `[x_min, y_min, x_max, y_max]`.
+    1.  **Locate Waste:** For each *distinct* piece of trash you find, provide a normalized bounding box `[x_min, y_min, x_max, y_max]`.
     2.  **Classify Waste:** Assign each piece of trash to one of the following strict categories. You MUST use one of these exact strings:
         *   `paper` (includes items like crumpled paper, cardboard, newspapers)
         *   `plastic` (bottles, containers, bags)
@@ -29,14 +29,14 @@ def classify_image(image: Image.Image):
         *   `metal` (cans, foil)
         *   `e-waste` (cables, electronic components)
         *   `organic` (food scraps)
-        *   `other` (waste that does not fit any other category)
+        *   `other` (waste that does not fit any other category, like pens)
 
     Respond with a single JSON object containing a key "trash_items", which is a list of objects.
-    Each object in the list must have two keys:
+    Each object in the list represents a single piece of trash and must have two keys:
     1.  "category": A string with one of the predefined categories listed above.
     2.  "bounding_box": A list of four numbers for the normalized bounding box.
 
-    Example Response:
+    Example Response for multiple items:
     ```json
     {
       "trash_items": [
@@ -53,6 +53,7 @@ def classify_image(image: Image.Image):
     ```
 
     If no trash is visible, return an empty list: `{"trash_items": []}`.
+    It is critical that you identify ALL items and provide a separate entry for each one.
     """
     
     response = model.generate_content([prompt, image])
