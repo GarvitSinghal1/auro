@@ -14,21 +14,22 @@ def classify_image(image: Image.Image):
     """
     
     # This ensures the model uses the latest API key configured in the main app.
-    model = genai.GenerativeModel('gemini-2.0-flash')
+    model = genai.GenerativeModel('gemini-1.5-pro-latest')
 
     prompt = """
     Analyze the provided image from a robot's camera to identify and classify all pieces of waste.
+    Your goal is to be as accurate as possible.
 
     Your task has two parts:
     1.  **Locate Waste:** For each piece of trash, provide a normalized bounding box `[x_min, y_min, x_max, y_max]`.
     2.  **Classify Waste:** Assign each piece of trash to one of the following strict categories. You MUST use one of these exact strings:
-        *   `paper`
-        *   `plastic`
-        *   `glass`
-        *   `metal`
-        *   `e-waste`
-        *   `organic`
-        *   `other`
+        *   `paper` (includes items like crumpled paper, cardboard, newspapers)
+        *   `plastic` (bottles, containers, bags)
+        *   `glass` (bottles, jars)
+        *   `metal` (cans, foil)
+        *   `e-waste` (cables, electronic components)
+        *   `organic` (food scraps)
+        *   `other` (waste that does not fit any other category)
 
     Respond with a single JSON object containing a key "trash_items", which is a list of objects.
     Each object in the list must have two keys:
