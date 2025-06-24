@@ -19,6 +19,7 @@ def classify_image(image: Image.Image):
     prompt = """
     Analyze the provided image from a robot's camera to identify and classify all pieces of waste.
     Your goal is to be as accurate as possible. Carefully check for multiple distinct objects.
+    **Crucially, you must ignore the surfaces the objects are resting on, such as tables, floors, and backgrounds.** Focus only on the waste items themselves.
 
     Your task has two parts:
     1.  **Locate Waste:** For each *distinct* piece of trash you find, provide a normalized bounding box `[x_min, y_min, x_max, y_max]`.
@@ -27,7 +28,7 @@ def classify_image(image: Image.Image):
         *   `plastic` (bottles, containers, bags)
         *   `glass` (bottles, jars)
         *   `metal` (cans, foil)
-        *   `e-waste` (cables, electronic components)
+        *   `e-waste` (cables, remote controls, electronic components)
         *   `organic` (food scraps)
         *   `other` (waste that does not fit any other category, like pens)
 

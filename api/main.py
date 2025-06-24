@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AURo API",
     description="AI-powered waste classification for the Autonomous Urban Recycler.",
-    version="1.4.6", # Improved prompt for multi-object detection
+    version="1.4.7", # Prompt fix: Ignore surfaces
     lifespan=lifespan
 )
 
