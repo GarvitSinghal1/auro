@@ -9,9 +9,28 @@
   Engineer: Krishiv Gupta (Hardware Integration), Garvit Singhal (Software)
 */
 
+#include "esp_camera.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+
+// CAMERA_MODEL_AI_THINKER
+#define PWDN_GPIO_NUM     32
+#define RESET_GPIO_NUM    -1
+#define XCLK_GPIO_NUM      0
+#define SIOD_GPIO_NUM     26
+#define SIOC_GPIO_NUM     27
+#define Y9_GPIO_NUM       35
+#define Y8_GPIO_NUM       34
+#define Y7_GPIO_NUM       39
+#define Y6_GPIO_NUM       36
+#define Y5_GPIO_NUM       21
+#define Y4_GPIO_NUM       19
+#define Y3_GPIO_NUM       18
+#define Y2_GPIO_NUM        5
+#define VSYNC_GPIO_NUM    25
+#define HREF_GPIO_NUM     23
+#define PCLK_GPIO_NUM     22
 
 // --- Configuration ---
 const char* WIFI_SSID = "YOUR_WIFI_SSID";
@@ -32,15 +51,16 @@ const char* API_URL = "https://auro-l4mh.onrender.com/classify/";
 
 // --- End of Configuration ---
 
+void camera_init();
+
 void setup() {
   Serial.begin(115200); // For debugging on the computer
   // MEGA_SERIAL.begin(9600, SERIAL_8N1, 16, 17); // For communication with Mega
   
   Serial.println("\n\nAURo ESP32-CAM Client Initializing...");
 
-  // --- KRISHIV: Camera Initialization ---
-  // The code to initialize your specific camera model goes here.
-  // For example: camera_init();
+  // --- Initialize Camera ---
+  camera_init();
   // ---
 
   connect_to_wifi();
@@ -79,23 +99,18 @@ void connect_to_wifi() {
 void classify_image() {
   Serial.println("Classification triggered!");
 
-  // --- KRISHIV: Camera Capture Logic ---
-  // This is where the code to capture a single frame from the camera goes.
-  // It should return a pointer to the image buffer and the length of the buffer.
-  // For example:
-  // camera_fb_t * fb = esp_camera_fb_get();
-  // if (!fb) {
-  //   Serial.println("Camera capture failed");
-  //   MEGA_SERIAL.println("Error: Capture failed");
-  //   return;
-  // }
-  // uint8_t* image_buffer = fb->buf;
-  // size_t image_len = fb->len;
+  // --- Camera Capture Logic ---
+  camera_fb_t * fb = esp_camera_fb_get();
+  if (!fb) {
+    Serial.println("Camera capture failed");
+    // MEGA_SERIAL.println("Error: Capture failed");
+    return;
+  }
   // ---
 
   // For now, we'll use placeholder data.
-  uint8_t* image_buffer = nullptr;
-  size_t image_len = 0;
+  uint8_t* image_buffer = fb->buf;
+  size_t image_len = fb->len;
   
   HTTPClient http;
   http.begin(API_URL);
@@ -117,10 +132,37 @@ void classify_image() {
       Serial.println(error.c_str());
       // MEGA_SERIAL.println("Error: JSON parsing failed");
     } else {
-      const char* classification = doc["classification"];
-      Serial.print("Object classified as: ");
-      Serial.println(classification);
-      // MEGA_SERIAL.println(classification); // Send the result to the Mega
+      // Updated parsing for the new v1.7.3 API response structure
+      if (doc["detections"].size() > 0) {
+        // Get the first detected object
+        JsonObject detection = doc["detections"][0];
+        
+        const char* category = detection["category"];
+        
+        JsonObject bbox = detection["bounding_box"];
+        float y_min = bbox["y_min"];
+        float x_min = bbox["x_min"];
+        float y_max = bbox["y_max"];
+        float x_max = bbox["x_max"];
+
+        Serial.println("--- Classification Result ---");
+        Serial.print("Category: ");
+        Serial.println(category);
+        Serial.println("Bounding Box:");
+        Serial.print("  y_min: "); Serial.println(y_min);
+        Serial.print("  x_min: "); Serial.println(x_min);
+        Serial.print("  y_max: "); Serial.println(y_max);
+        Serial.print("  x_max: "); Serial.println(x_max);
+        Serial.println("---------------------------");
+
+        // Example of sending data to Mega (adapt as needed)
+        // String mega_message = String(category) + "," + String(x_min) + "," + String(y_max);
+        // MEGA_SERIAL.println(mega_message);
+
+      } else {
+        Serial.println("No objects detected in the image.");
+        // MEGA_SERIAL.println("Result: No objects detected");
+      }
     }
   } else {
     Serial.print("Error on HTTP request: ");
@@ -130,8 +172,47 @@ void classify_image() {
 
   http.end();
   
-  // --- KRISHIV: Release Frame Buffer ---
-  // Remember to release the frame buffer after you're done.
-  // esp_camera_fb_return(fb);
+  // --- Release Frame Buffer ---
+  esp_camera_fb_return(fb);
   // ---
+}
+
+void camera_init(){
+  camera_config_t config;
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer = LEDC_TIMER_0;
+  config.pin_d0 = Y2_GPIO_NUM;
+  config.pin_d1 = Y3_GPIO_NUM;
+  config.pin_d2 = Y4_GPIO_NUM;
+  config.pin_d3 = Y5_GPIO_NUM;
+  config.pin_d4 = Y6_GPIO_NUM;
+  config.pin_d5 = Y7_GPIO_NUM;
+  config.pin_d6 = Y8_GPIO_NUM;
+  config.pin_d7 = Y9_GPIO_NUM;
+  config.pin_xclk = XCLK_GPIO_NUM;
+  config.pin_pclk = PCLK_GPIO_NUM;
+  config.pin_vsync = VSYNC_GPIO_NUM;
+  config.pin_href = HREF_GPIO_NUM;
+  config.pin_sccb_sda = SIOD_GPIO_NUM;
+  config.pin_sccb_scl = SIOC_GPIO_NUM;
+  config.pin_pwdn = PWDN_GPIO_NUM;
+  config.pin_reset = RESET_GPIO_NUM;
+  config.xclk_freq_hz = 20000000;
+  config.pixel_format = PIXFORMAT_JPEG;
+  
+  // Frame size
+  //FRAMESIZE_VGA (640x480) is a good balance.
+  //For higher detail: FRAMESIZE_SVGA (800x600), FRAMESIZE_XGA (1024x768)
+  //For faster speed: FRAMESIZE_QVGA (320x240)
+  config.frame_size = FRAMESIZE_VGA;
+  config.jpeg_quality = 12; //0-63 lower number means higher quality
+  config.fb_count = 1;
+
+  // Camera init
+  esp_err_t err = esp_camera_init(&config);
+  if (err != ESP_OK) {
+    Serial.printf("Camera init failed with error 0x%x", err);
+    return;
+  }
+  Serial.println("Camera initialized successfully.");
 } 

@@ -75,15 +75,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AURo API",
     description="AI-powered waste classification for the Autonomous Urban Recycler.",
-    version="1.7.3", # Added health check endpoint for status badge
+    version="1.7.4", # Allow HEAD requests for health checks
     lifespan=lifespan
 )
 
-@app.get("/", include_in_schema=False) # Hide from docs
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False) # Hide from docs
 async def root():
     return { "message": "Welcome to the AURo API!", "version": app.version, "docs_url": "/docs" }
 
-@app.get("/health", response_class=PlainTextResponse)
+@app.api_route("/health", methods=["GET", "HEAD"], response_class=PlainTextResponse)
 async def health_check():
     """
     A simple health check endpoint that returns "OK" with a 200 status code.
